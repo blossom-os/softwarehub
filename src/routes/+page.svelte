@@ -2,6 +2,7 @@
     import { invoke } from "@tauri-apps/api/core";
     import { listen } from "@tauri-apps/api/event";
     import { onMount, onDestroy } from "svelte";
+    import Titlebar from "$lib/Titlebar.svelte";
 
     let refName = $state("");
     let progress = $state({
@@ -130,40 +131,62 @@
     }
 </script>
 
-<main class="container">
-    <h1>Software Hub</h1>
+<Titlebar />
 
-    <form class="row" onsubmit={install}>
+<main class="m-0 pt-[calc(30px+10vh)] flex flex-col justify-center text-center">
+    <h1 class="text-center">Software Hub</h1>
+
+    <form class="flex justify-center" onsubmit={install}>
         <input
             id="greet-input"
+            class="rounded-lg border border-transparent px-[1.2em] py-[0.6em] text-base font-medium font-inherit text-[#0f0f0f] bg-white transition-[border-color] duration-[0.25s] shadow-[0_2px_2px_rgba(0,0,0,0.2)] outline-none mr-[5px] dark:text-white dark:bg-[#0f0f0f98]"
             placeholder="Enter Flatpak ref (e.g., org.example.App)..."
             bind:value={refName}
         />
-        <button type="submit">Install</button>
-        <button type="button" onclick={uninstall}>Uninstall</button>
+        <button
+            type="submit"
+            class="rounded-lg border border-transparent px-[1.2em] py-[0.6em] text-base font-medium font-inherit text-[#0f0f0f] bg-white transition-[border-color] duration-[0.25s] shadow-[0_2px_2px_rgba(0,0,0,0.2)] outline-none cursor-pointer hover:border-[#396cd8] active:border-[#396cd8] active:bg-[#e8e8e8] dark:text-white dark:bg-[#0f0f0f98] dark:active:bg-[#0f0f0f69] ml-[5px]"
+        >
+            Install
+        </button>
+        <button
+            type="button"
+            onclick={uninstall}
+            class="rounded-lg border border-transparent px-[1.2em] py-[0.6em] text-base font-medium font-inherit text-[#0f0f0f] bg-white transition-[border-color] duration-[0.25s] shadow-[0_2px_2px_rgba(0,0,0,0.2)] outline-none cursor-pointer hover:border-[#396cd8] active:border-[#396cd8] active:bg-[#e8e8e8] dark:text-white dark:bg-[#0f0f0f98] dark:active:bg-[#0f0f0f69] ml-[5px]"
+        >
+            Uninstall
+        </button>
     </form>
 
     {#if operationStatus}
-        <div class="status">
+        <div class="mt-5 p-2.5 bg-[#e8f4f8] rounded-lg dark:bg-[#1a3a4a]">
             <p><strong>Status:</strong> {operationStatus}</p>
         </div>
     {/if}
 
     {#if operationStatus && (progress.percentage > 0 || progress.status)}
-        <div class="progress-container">
+        <div
+            class="mt-5 p-[15px] bg-[#f0f0f0] rounded-lg max-w-[500px] mx-auto dark:bg-[#1a1a1a]"
+        >
             <p><strong>Progress:</strong> {progress.percentage}%</p>
-            <div class="progress-bar">
+            <div
+                class="w-full h-5 bg-[#ddd] rounded-[10px] overflow-hidden my-2.5 dark:bg-[#333]"
+            >
                 <div
-                    class="progress-fill"
+                    class="h-full bg-[#396cd8] transition-[width] duration-300 ease-in-out"
                     style="width: {progress.percentage || 1}%"
                 ></div>
             </div>
-            <div class="progress-info">
+            <div class="flex justify-between items-center mt-[5px]">
                 {#if progress.status}
-                    <p class="progress-status">{progress.status}</p>
+                    <p class="text-[0.9em] text-[#666] m-0 dark:text-[#aaa]">
+                        {progress.status}
+                    </p>
                 {/if}
                 {#if progress.speed_mbps > 0}
-                    <p class="progress-speed">
+                    <p
+                        class="text-[0.9em] text-[#396cd8] font-semibold m-0 dark:text-[#24c8db]"
+                    >
                         {progress.speed_mbps.toFixed(2)} MB/s
                     </p>
                 {/if}
@@ -171,201 +194,3 @@
         </div>
     {/if}
 </main>
-
-<style>
-    .logo.vite:hover {
-        filter: drop-shadow(0 0 2em #747bff);
-    }
-
-    .logo.svelte-kit:hover {
-        filter: drop-shadow(0 0 2em #ff3e00);
-    }
-
-    :root {
-        font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
-        font-size: 16px;
-        line-height: 24px;
-        font-weight: 400;
-
-        color: #0f0f0f;
-        background-color: #f6f6f6;
-
-        font-synthesis: none;
-        text-rendering: optimizeLegibility;
-        -webkit-font-smoothing: antialiased;
-        -moz-osx-font-smoothing: grayscale;
-        -webkit-text-size-adjust: 100%;
-    }
-
-    .container {
-        margin: 0;
-        padding-top: 10vh;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        text-align: center;
-    }
-
-    .logo {
-        height: 6em;
-        padding: 1.5em;
-        will-change: filter;
-        transition: 0.75s;
-    }
-
-    .logo.tauri:hover {
-        filter: drop-shadow(0 0 2em #24c8db);
-    }
-
-    .row {
-        display: flex;
-        justify-content: center;
-    }
-
-    a {
-        font-weight: 500;
-        color: #646cff;
-        text-decoration: inherit;
-    }
-
-    a:hover {
-        color: #535bf2;
-    }
-
-    h1 {
-        text-align: center;
-    }
-
-    input,
-    button {
-        border-radius: 8px;
-        border: 1px solid transparent;
-        padding: 0.6em 1.2em;
-        font-size: 1em;
-        font-weight: 500;
-        font-family: inherit;
-        color: #0f0f0f;
-        background-color: #ffffff;
-        transition: border-color 0.25s;
-        box-shadow: 0 2px 2px rgba(0, 0, 0, 0.2);
-    }
-
-    button {
-        cursor: pointer;
-    }
-
-    button:hover {
-        border-color: #396cd8;
-    }
-    button:active {
-        border-color: #396cd8;
-        background-color: #e8e8e8;
-    }
-
-    input,
-    button {
-        outline: none;
-    }
-
-    #greet-input {
-        margin-right: 5px;
-    }
-
-    button + button {
-        margin-left: 5px;
-    }
-
-    .status {
-        margin-top: 20px;
-        padding: 10px;
-        background-color: #e8f4f8;
-        border-radius: 8px;
-    }
-
-    .progress-container {
-        margin-top: 20px;
-        padding: 15px;
-        background-color: #f0f0f0;
-        border-radius: 8px;
-        max-width: 500px;
-        margin-left: auto;
-        margin-right: auto;
-    }
-
-    .progress-bar {
-        width: 100%;
-        height: 20px;
-        background-color: #ddd;
-        border-radius: 10px;
-        overflow: hidden;
-        margin: 10px 0;
-    }
-
-    .progress-fill {
-        height: 100%;
-        background-color: #396cd8;
-        transition: width 0.3s ease;
-    }
-
-    .progress-info {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-top: 5px;
-    }
-
-    .progress-status {
-        font-size: 0.9em;
-        color: #666;
-        margin: 0;
-    }
-
-    .progress-speed {
-        font-size: 0.9em;
-        color: #396cd8;
-        font-weight: 600;
-        margin: 0;
-    }
-
-    @media (prefers-color-scheme: dark) {
-        .status {
-            background-color: #1a3a4a;
-        }
-
-        .progress-container {
-            background-color: #1a1a1a;
-        }
-
-        .progress-bar {
-            background-color: #333;
-        }
-
-        .progress-status {
-            color: #aaa;
-        }
-
-        .progress-speed {
-            color: #24c8db;
-        }
-    }
-
-    @media (prefers-color-scheme: dark) {
-        :root {
-            color: #f6f6f6;
-            background-color: #2f2f2f;
-        }
-
-        a:hover {
-            color: #24c8db;
-        }
-
-        input,
-        button {
-            color: #ffffff;
-            background-color: #0f0f0f98;
-        }
-        button:active {
-            background-color: #0f0f0f69;
-        }
-    }
-</style>
