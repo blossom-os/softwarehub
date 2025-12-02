@@ -56,31 +56,52 @@
             Software Hub
         </div>
     </div>
-    <div class="flex items-center h-full shrink-0 m-2">
-        <button
-            class="w-5 h-5 flex items-center justify-center rounded-md bg-transparent border-0 m-0.5 transition-all duration-150 cursor-pointer appearance-none outline-none hover:bg-white/20"
+    <div class="flex items-center h-full shrink-0">
+        <div
+            role="button"
+            tabindex="0"
+            class="group p-2 rounded-md transition-all duration-150 cursor-pointer"
             onclick={() => appWindow?.minimize()}
+            onkeydown={(e) => e.key === "Enter" || e.key === " " ? appWindow?.minimize() : null}
             title="Minimize"
         >
-            <Minus weight="bold" class="w-3.5 h-3.5" />
-        </button>
-        <button
-            class="w-5 h-5 flex items-center justify-center rounded-md bg-transparent border-0 m-0.5 transition-all duration-150 cursor-pointer appearance-none outline-none hover:bg-white/20"
+            <button
+                class="w-5 h-5 flex items-center justify-center bg-transparent border-0 transition-all duration-150 cursor-pointer appearance-none outline-none rounded-md group-hover:bg-white/20 pointer-events-none"
+            >
+                <Minus weight="bold" class="w-3.5 h-3.5" />
+            </button>
+        </div>
+        <div
+            role="button"
+            tabindex="0"
+            class="group p-2 rounded-md transition-all duration-150 cursor-pointer"
             onclick={() => appWindow?.toggleMaximize()}
+            onkeydown={(e) => e.key === "Enter" || e.key === " " ? appWindow?.toggleMaximize() : null}
             title={isMaximized || isFullscreen ? "Restore" : "Maximize"}
         >
-            {#if isMaximized || isFullscreen}
-                <ArrowsInSimple weight="bold" class="w-3.5 h-3.5" />
-            {:else}
-                <ArrowsOutSimple weight="bold" class="w-3.5 h-3.5" />
-            {/if}
-        </button>
-        <button
-            class="w-5 h-5 flex items-center justify-center rounded-md bg-transparent border-0 m-0.5 transition-all duration-150 cursor-pointer appearance-none outline-none hover:bg-red-300/90"
+            <button
+                class="w-5 h-5 flex items-center justify-center bg-transparent border-0 transition-all duration-150 cursor-pointer appearance-none outline-none rounded-md group-hover:bg-white/20 pointer-events-none"
+            >
+                {#if isMaximized || isFullscreen}
+                    <ArrowsInSimple weight="bold" class="w-3.5 h-3.5" />
+                {:else}
+                    <ArrowsOutSimple weight="bold" class="w-3.5 h-3.5" />
+                {/if}
+            </button>
+        </div>
+        <div
+            role="button"
+            tabindex="0"
+            class="group p-2 rounded-md transition-all duration-150 cursor-pointer"
             onclick={() => appWindow?.close()}
+            onkeydown={(e) => e.key === "Enter" || e.key === " " ? appWindow?.close() : null}
             title="Close"
         >
-            <X weight="bold" class="w-3.5 h-3.5" />
-        </button>
+            <button
+                class="w-5 h-5 flex items-center justify-center bg-transparent border-0 transition-all duration-150 cursor-pointer appearance-none outline-none rounded-md group-hover:bg-red-300/90 pointer-events-none"
+            >
+                <X weight="bold" class="w-3.5 h-3.5" />
+            </button>
+        </div>
     </div>
 </div>
