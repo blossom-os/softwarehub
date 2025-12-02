@@ -60,7 +60,7 @@
         <div
             role="button"
             tabindex="0"
-            class="group p-2 rounded-md transition-all duration-150 cursor-pointer"
+            class="group py-2 px-1 rounded-md transition-all duration-150 cursor-pointer"
             onclick={() => appWindow?.minimize()}
             onkeydown={(e) => e.key === "Enter" || e.key === " " ? appWindow?.minimize() : null}
             title="Minimize"
@@ -74,7 +74,7 @@
         <div
             role="button"
             tabindex="0"
-            class="group p-2 rounded-md transition-all duration-150 cursor-pointer"
+            class="group py-2 px-1 rounded-md transition-all duration-150 cursor-pointer"
             onclick={() => appWindow?.toggleMaximize()}
             onkeydown={(e) => e.key === "Enter" || e.key === " " ? appWindow?.toggleMaximize() : null}
             title={isMaximized || isFullscreen ? "Restore" : "Maximize"}
@@ -92,7 +92,7 @@
         <div
             role="button"
             tabindex="0"
-            class="group p-2 rounded-md transition-all duration-150 cursor-pointer"
+            class="group py-2 px-1 pr-2 rounded-md transition-all duration-150 cursor-pointer"
             onclick={() => appWindow?.close()}
             onkeydown={(e) => e.key === "Enter" || e.key === " " ? appWindow?.close() : null}
             title="Close"
