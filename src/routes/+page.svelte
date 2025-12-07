@@ -1,196 +1,285 @@
 <script lang="ts">
-    import { invoke } from "@tauri-apps/api/core";
-    import { listen } from "@tauri-apps/api/event";
-    import { onMount, onDestroy } from "svelte";
-    import Titlebar from "$lib/Titlebar.svelte";
+	import { onMount } from "svelte";
+	import AppCard from "$lib/components/AppCard.svelte";
+	import { flathub, type App, type Collection } from "$lib/services/flathub";
+	import { goto, afterNavigate } from "$app/navigation";
+	import { getCachedCategories, getHomepageCollections, getAppIconsBatch, type CachedApp } from "$lib/services/cache";
+	import { openAppDetails } from "$lib/stores/overlay";
 
-    let refName = $state("");
-    let progress = $state({
-        percentage: 0,
-        status: "",
-        ref: "",
-        speed_mbps: 0,
-    });
-    let operationStatus = $state("");
+	let searchQuery = $state("");
+	let searchResults = $state<App[]>([]);
+	let searching = $state(false);
+	let popularApps = $state<App[]>([]);
+	let trendingApps = $state<App[]>([]);
+	let recentlyUpdated = $state<App[]>([]);
+	let categories = $state<Collection[]>([]);
+	let hasData = $state(false);
 
-    let unlistenProgress: (() => void) | null = null;
-    let unlistenOperationStarted: (() => void) | null = null;
-    let unlistenComplete: (() => void) | null = null;
-    let unlistenUninstallStarted: (() => void) | null = null;
-    let unlistenUninstallComplete: (() => void) | null = null;
+	const DISPLAY_COUNT = 8; // Show only 8 apps per section on frontpage
 
-    onMount(async () => {
-        unlistenProgress = await listen("flatpak-progress", (event) => {
-            const data = event.payload as {
-                percentage: number;
-                status: string;
-                ref: string;
-                speed_mbps: number;
-            };
-            progress = data;
-            console.log(
-                `Progress: ${data.percentage}% - ${data.status} (${data.ref}) - ${data.speed_mbps.toFixed(2)} MB/s`,
-            );
-        });
+	const showSearchResults = $derived(searchResults.length > 0);
+	const showHomeContent = $derived(!showSearchResults);
+	const showSkeletons = $derived(!hasData && !showSearchResults);
+	
+	function mapAppSync(app: { icon_path?: string; icon_url?: string; app_id: string; name?: string; summary?: string; description?: string; download_flatpak_ref?: string }): App {
+		return {
+			app_id: app.app_id,
+			name: app.name,
+			summary: app.summary,
+			description: app.description,
+			download_flatpak_ref: app.download_flatpak_ref,
+			icon: app.icon_url || app.icon_path,
+		};
+	}
 
-        unlistenOperationStarted = await listen(
-            "flatpak-operation-started",
-            (event) => {
-                const data = event.payload as {
-                    operation_type: string;
-                    ref: string;
-                };
-                operationStatus = `${data.operation_type} on ${data.ref}`;
-                console.log(
-                    `Operation started: ${data.operation_type} on ${data.ref}`,
-                );
-            },
-        );
+	async function loadCategories() {
+		try {
+			const cats = await getCachedCategories();
+			if (cats && cats.length > 0) {
+				categories = cats.map(cat => ({
+					id: cat.id,
+					name: cat.name,
+				}));
+			}
+		} catch (error) {
+			console.error("Failed to load categories from cache:", error);
+		}
+	}
 
-        unlistenComplete = await listen("flatpak-install-complete", (event) => {
-            const data = event.payload as { ref: string };
-            operationStatus = `Install complete: ${data.ref}`;
-            console.log(`Install complete: ${data.ref}`);
-        });
+	onMount(async () => {
+		Promise.all([loadCategories(), loadCollections()]);
+		
+		const { getCurrentWindow } = await import("@tauri-apps/api/window");
+		await getCurrentWindow().listen("cache-progress", async (event: any) => {
+			const progress = event.payload;
+			
+			if (progress.stage === "complete") {
+				await Promise.all([loadCategories(), loadCollections()]);
+			}
+		});
+	});
 
-        unlistenUninstallStarted = await listen(
-            "flatpak-uninstall-started",
-            (event) => {
-                const data = event.payload as { ref: string };
-                progress = {
-                    percentage: 0,
-                    status: "Starting uninstallation...",
-                    ref: data.ref,
-                    speed_mbps: 0,
-                };
-                operationStatus = `Uninstalling: ${data.ref}`;
-                console.log(`Uninstall started: ${data.ref}`);
-            },
-        );
+	async function loadCollections() {
+		try {
+			const collections = await getHomepageCollections();
+			
+			const allAppIdsSet = new Set<string>();
+			collections.popular.forEach(app => allAppIdsSet.add(app.app_id));
+			collections.trending.forEach(app => allAppIdsSet.add(app.app_id));
+			collections.recentlyUpdated.forEach(app => allAppIdsSet.add(app.app_id));
+			const allAppIds = Array.from(allAppIdsSet);
+			
+			const iconDataUrls = await getAppIconsBatch(allAppIds);
+			const iconMap = new Map<string, string | null>();
+			allAppIds.forEach((id, index) => {
+				iconMap.set(id, iconDataUrls[index]);
+			});
+			
+			const appMap = new Map<string, App>();
+			const mapApp = (cached: CachedApp): App => {
+				if (appMap.has(cached.app_id)) {
+					return appMap.get(cached.app_id)!;
+				}
+				let icon: string | undefined = iconMap.get(cached.app_id) || undefined;
+				if (!icon) {
+					icon = cached.icon_url || undefined;
+				}
+				const app: App = {
+					app_id: cached.app_id,
+					name: cached.name || undefined,
+					summary: cached.summary || undefined,
+					description: cached.description || undefined,
+					download_flatpak_ref: cached.download_flatpak_ref || undefined,
+					icon: icon,
+				};
+				appMap.set(cached.app_id, app);
+				return app;
+			};
+			
+			if (collections.popular.length > 0) {
+				const uniquePopular = collections.popular
+					.filter((app, index, self) => self.findIndex(a => a.app_id === app.app_id) === index)
+					.slice(0, DISPLAY_COUNT)
+					.map(mapApp);
+				popularApps = uniquePopular;
+				hasData = true;
+			}
+			if (collections.trending.length > 0) {
+				const uniqueTrending = collections.trending
+					.filter((app, index, self) => self.findIndex(a => a.app_id === app.app_id) === index)
+					.slice(0, DISPLAY_COUNT)
+					.map(mapApp);
+				trendingApps = uniqueTrending;
+			}
+			if (collections.recentlyUpdated.length > 0) {
+				const uniqueRecentlyUpdated = collections.recentlyUpdated
+					.filter((app, index, self) => self.findIndex(a => a.app_id === app.app_id) === index)
+					.slice(0, DISPLAY_COUNT)
+					.map(mapApp);
+				recentlyUpdated = uniqueRecentlyUpdated;
+			}
+		} catch (error) {
+			console.error("Failed to load collections:", error);
+		}
+	}
 
-        unlistenUninstallComplete = await listen(
-            "flatpak-uninstall-complete",
-            (event) => {
-                const data = event.payload as { ref: string };
-                operationStatus = `Uninstall complete: ${data.ref}`;
-                console.log(`Uninstall complete: ${data.ref}`);
-            },
-        );
-    });
+	afterNavigate(async () => {
+		await Promise.all([loadCategories(), loadCollections()]);
+	});
 
-    onDestroy(() => {
-        unlistenProgress?.();
-        unlistenOperationStarted?.();
-        unlistenComplete?.();
-        unlistenUninstallStarted?.();
-        unlistenUninstallComplete?.();
-    });
+	function handleCategoryClick(categoryId: string) {
+		goto(`/category/${categoryId}`);
+	}
 
-    async function install(event: Event) {
-        event.preventDefault();
-        if (!refName.trim()) {
-            alert("Please enter a Flatpak ref name");
-            return;
-        }
+	async function handleSearch() {
+		if (!searchQuery.trim()) {
+			searchResults = [];
+			return;
+		}
+		searching = true;
+		try {
+			const result = await flathub.searchApps(searchQuery);
+			searchResults = result.hits || [];
+		} catch (error) {
+			console.error("Search failed:", error);
+			searchResults = [];
+		} finally {
+			searching = false;
+		}
+	}
 
-        try {
-            progress = {
-                percentage: 0,
-                status: "Starting...",
-                ref: refName,
-                speed_mbps: 0,
-            };
-            operationStatus = "Starting installation...";
-            await invoke("install_flatpak", { refName });
-        } catch (error) {
-            console.error("Error installing:", error);
-            operationStatus = `Error: ${error}`;
-        }
-    }
+	function clearSearch() {
+		searchQuery = "";
+		searchResults = [];
+	}
 
-    async function uninstall(event: Event) {
-        event.preventDefault();
-        if (!refName.trim()) {
-            alert("Please enter a Flatpak ref name");
-            return;
-        }
-
-        try {
-            progress = {
-                percentage: 0,
-                status: "Starting...",
-                ref: refName,
-                speed_mbps: 0,
-            };
-            operationStatus = "Starting uninstallation...";
-            await invoke("uninstall_flatpak", { refName });
-        } catch (error) {
-            console.error("Error uninstalling:", error);
-            operationStatus = `Error: ${error}`;
-        }
-    }
+	function handleKeydown(event: KeyboardEvent) {
+		if (event.key === "Enter") {
+			handleSearch();
+		}
+	}
 </script>
 
-<Titlebar />
+<div class="container mx-auto p-4 pt-4">
+	<h1 class="text-3xl font-bold mb-6 text-gray-900 dark:text-gray-100">Software Hub</h1>
+	
+	{#if categories.length > 0}
+		<div class="mb-8">
+			<h2 class="text-2xl font-bold mb-4 text-gray-900 dark:text-gray-100">Categories</h2>
+			<div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-10 gap-3">
+				{#each categories as category (category.id)}
+					<button
+						onclick={() => handleCategoryClick(category.id || "")}
+						class="p-4 border border-gray-200 dark:border-gray-800 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors bg-white dark:bg-gray-900 text-left"
+					>
+						<h3 class="font-semibold text-sm text-gray-900 dark:text-gray-100 truncate">{category.name || category.id}</h3>
+					</button>
+				{/each}
+			</div>
+		</div>
+	{/if}
 
-<main class="m-0 pt-[calc(30px+10vh)] flex flex-col justify-center text-center">
-    <h1 class="text-center">Software Hub</h1>
+	<div class="mb-8">
+		<div class="flex gap-2 max-w-2xl">
+			<input
+				type="text"
+				class="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+				placeholder="Search for apps..."
+				bind:value={searchQuery}
+				onkeydown={handleKeydown}
+			/>
+			<button
+				class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+				onclick={handleSearch}
+				disabled={searching}
+			>
+				{searching ? "Searching..." : "Search"}
+			</button>
+		</div>
+	</div>
 
-    <form class="flex justify-center" onsubmit={install}>
-        <input
-            id="greet-input"
-            class="rounded-lg border border-transparent px-[1.2em] py-[0.6em] text-base font-medium font-inherit text-[#0f0f0f] bg-white transition-[border-color] duration-[0.25s] shadow-[0_2px_2px_rgba(0,0,0,0.2)] outline-none mr-[5px] dark:text-white dark:bg-[#0f0f0f98]"
-            placeholder="Enter Flatpak ref (e.g., org.example.App)..."
-            bind:value={refName}
-        />
-        <button
-            type="submit"
-            class="rounded-lg border border-transparent px-[1.2em] py-[0.6em] text-base font-medium font-inherit text-[#0f0f0f] bg-white transition-[border-color] duration-[0.25s] shadow-[0_2px_2px_rgba(0,0,0,0.2)] outline-none cursor-pointer hover:border-[#396cd8] active:border-[#396cd8] active:bg-[#e8e8e8] dark:text-white dark:bg-[#0f0f0f98] dark:active:bg-[#0f0f0f69] ml-[5px]"
-        >
-            Install
-        </button>
-        <button
-            type="button"
-            onclick={uninstall}
-            class="rounded-lg border border-transparent px-[1.2em] py-[0.6em] text-base font-medium font-inherit text-[#0f0f0f] bg-white transition-[border-color] duration-[0.25s] shadow-[0_2px_2px_rgba(0,0,0,0.2)] outline-none cursor-pointer hover:border-[#396cd8] active:border-[#396cd8] active:bg-[#e8e8e8] dark:text-white dark:bg-[#0f0f0f98] dark:active:bg-[#0f0f0f69] ml-[5px]"
-        >
-            Uninstall
-        </button>
-    </form>
+	{#if showSearchResults}
+		<div class="mb-8">
+			<div class="flex items-center justify-between mb-4">
+				<h2 class="text-2xl font-bold text-gray-900 dark:text-gray-100">Search Results</h2>
+				<button
+					class="px-4 py-2 text-sm bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+					onclick={clearSearch}
+				>
+					Clear Search
+				</button>
+			</div>
+			<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+				{#each searchResults as app (app.app_id)}
+					<div class="block" onclick={() => openAppDetails(app.app_id)}>
+						<AppCard {app} />
+					</div>
+				{/each}
+			</div>
+		</div>
+	{/if}
 
-    {#if operationStatus}
-        <div class="mt-5 p-2.5 bg-[#e8f4f8] rounded-lg dark:bg-[#1a3a4a]">
-            <p><strong>Status:</strong> {operationStatus}</p>
-        </div>
-    {/if}
+	{#if popularApps.length > 0 && showHomeContent}
+		<div class="mb-8">
+			<div class="flex items-center gap-2 mb-4">
+				<h2 class="text-2xl font-bold text-gray-900 dark:text-gray-100">Popular Apps</h2>
+			</div>
+			<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+				{#each popularApps as app (app.app_id)}
+					<div class="block" role="button" tabindex="0" onclick={() => openAppDetails(app.app_id)}>
+						<AppCard {app} />
+					</div>
+				{/each}
+			</div>
+		</div>
+	{/if}
 
-    {#if operationStatus && (progress.percentage > 0 || progress.status)}
-        <div
-            class="mt-5 p-[15px] bg-[#f0f0f0] rounded-lg max-w-[500px] mx-auto dark:bg-[#1a1a1a]"
-        >
-            <p><strong>Progress:</strong> {progress.percentage}%</p>
-            <div
-                class="w-full h-5 bg-[#ddd] rounded-[10px] overflow-hidden my-2.5 dark:bg-[#333]"
-            >
-                <div
-                    class="h-full bg-[#396cd8] transition-[width] duration-300 ease-in-out"
-                    style="width: {progress.percentage || 1}%"
-                ></div>
-            </div>
-            <div class="flex justify-between items-center mt-[5px]">
-                {#if progress.status}
-                    <p class="text-[0.9em] text-[#666] m-0 dark:text-[#aaa]">
-                        {progress.status}
-                    </p>
-                {/if}
-                {#if progress.speed_mbps > 0}
-                    <p
-                        class="text-[0.9em] text-[#396cd8] font-semibold m-0 dark:text-[#24c8db]"
-                    >
-                        {progress.speed_mbps.toFixed(2)} MB/s
-                    </p>
-                {/if}
-            </div>
-        </div>
-    {/if}
-</main>
+	{#if trendingApps.length > 0 && showHomeContent}
+		<div class="mb-8">
+			<div class="flex items-center gap-2 mb-4">
+				<h2 class="text-2xl font-bold text-gray-900 dark:text-gray-100">Trending</h2>
+			</div>
+			<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+				{#each trendingApps as app (app.app_id)}
+					<div class="block" role="button" tabindex="0" onclick={() => openAppDetails(app.app_id)}>
+						<AppCard {app} />
+					</div>
+				{/each}
+			</div>
+		</div>
+	{/if}
+
+	{#if recentlyUpdated.length > 0 && showHomeContent}
+		<div class="mb-8">
+			<div class="flex items-center gap-2 mb-4">
+				<h2 class="text-2xl font-bold text-gray-900 dark:text-gray-100">Recently Updated</h2>
+			</div>
+			<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+				{#each recentlyUpdated as app (app.app_id)}
+					<div class="block" role="button" tabindex="0" onclick={() => openAppDetails(app.app_id)}>
+						<AppCard {app} />
+					</div>
+				{/each}
+			</div>
+		</div>
+	{/if}
+
+	{#if showSkeletons}
+		<div class="mb-8">
+			<div class="flex items-center gap-2 mb-4">
+				<div class="h-7 bg-gray-200 dark:bg-gray-700 rounded animate-pulse w-32"></div>
+			</div>
+			<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+				{#each Array(8) as _}
+					<AppCard skeleton={true} />
+				{/each}
+			</div>
+		</div>
+	{/if}
+
+	{#if !showSkeletons && !hasData && !showSearchResults}
+		<div class="text-center py-12">
+			<h2 class="text-2xl font-bold mb-2 text-gray-900 dark:text-gray-100">Welcome to Software Hub</h2>
+		</div>
+	{/if}
+</div>

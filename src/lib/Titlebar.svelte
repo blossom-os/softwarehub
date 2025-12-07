@@ -2,12 +2,28 @@
     import { onMount } from "svelte";
     import { invoke } from "@tauri-apps/api/core";
     import { getCurrentWindow } from "@tauri-apps/api/window";
-    import { X, ArrowsInSimple, ArrowsOutSimple, Minus } from "phosphor-svelte";
+    import { X, ArrowsInSimple, ArrowsOutSimple, Minus, List } from "phosphor-svelte";
+    import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "$lib/components/ui/dropdown-menu";
+    import { initializeCache } from "$lib/services/cache";
 
     let kdeTheme = $state<any>(null);
     let appWindow: any = null;
     let isMaximized = $state(false);
     let isFullscreen = $state(false);
+    let menuOpen = $state(false);
+    let refetching = $state(false);
+    
+    async function handleRefetch() {
+        menuOpen = false;
+        refetching = true;
+        try {
+            await initializeCache(undefined, true);
+        } catch (error) {
+            console.error("Failed to refetch cache:", error);
+        } finally {
+            refetching = false;
+        }
+    }
 
     onMount(async () => {
         appWindow = getCurrentWindow();
@@ -56,7 +72,28 @@
             Software Hub
         </div>
     </div>
-    <div class="flex items-center h-full shrink-0">
+    <div class="flex items-center h-full shrink-0 gap-1">
+        <DropdownMenu>
+            <DropdownMenuTrigger
+                class="group py-2 px-1 rounded-md transition-all duration-150 cursor-pointer"
+                onclick={() => menuOpen = !menuOpen}
+            >
+                <button
+                    class="w-5 h-5 flex items-center justify-center bg-transparent border-0 transition-all duration-150 cursor-pointer appearance-none outline-none rounded-md group-hover:bg-white/20 pointer-events-none"
+                    title="Menu"
+                >
+                    <List weight="bold" class="w-3.5 h-3.5" />
+                </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent open={menuOpen} class="right-0 top-8">
+                <DropdownMenuItem
+                    onclick={handleRefetch}
+                    class={refetching ? "opacity-50 cursor-not-allowed" : ""}
+                >
+                    {refetching ? "Refetching..." : "Refetch Cache"}
+                </DropdownMenuItem>
+            </DropdownMenuContent>
+        </DropdownMenu>
         <div
             role="button"
             tabindex="0"

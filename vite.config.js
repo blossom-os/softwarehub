@@ -1,12 +1,16 @@
 import { defineConfig } from "vite";
 import { sveltekit } from "@sveltejs/kit/vite";
+import { enhancedImages } from "@sveltejs/enhanced-img";
 
 // @ts-expect-error process is a nodejs global
 const host = process.env.TAURI_DEV_HOST;
 
 // https://vite.dev/config/
-export default defineConfig(async () => ({
-  plugins: [sveltekit()],
+export default defineConfig({
+  plugins: [
+    enhancedImages(),
+    sveltekit()
+  ],
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //
@@ -19,14 +23,29 @@ export default defineConfig(async () => ({
     host: host || false,
     hmr: host
       ? {
-          protocol: "ws",
-          host,
-          port: 1421,
-        }
+        protocol: "ws",
+        host,
+        port: 1421,
+      }
       : undefined,
     watch: {
       // 3. tell Vite to ignore watching `src-tauri`
       ignored: ["**/src-tauri/**"],
     },
   },
-}));
+  build: {
+    target: "esnext",
+    minify: "esbuild",
+    cssMinify: true,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          "vendor": ["svelte", "@sveltejs/kit"],
+        },
+      },
+    },
+  },
+  optimizeDeps: {
+    include: ["svelte", "@sveltejs/kit"],
+  },
+});

@@ -73,6 +73,29 @@ pub mod flatpak {
     }
 
     #[tauri::command]
+    pub fn is_flatpak_installed(ref_id: String) -> Result<bool, String> {
+        let installation = Installation::new_system(None::<&libflatpak::gio::Cancellable>)
+            .map_err(|e| e.to_string())?;
+        let cancellable = libflatpak::gio::Cancellable::new();
+
+        let installed_refs = installation
+            .list_installed_refs(Some(&cancellable))
+            .map_err(|e| format!("Failed to list installed refs: {}", e))?;
+
+        let ref_id_clean = ref_id.strip_prefix("app/").unwrap_or(&ref_id);
+
+        for installed_ref in installed_refs {
+            if let Some(name) = installed_ref.name() {
+                if name == ref_id_clean {
+                    return Ok(true);
+                }
+            }
+        }
+
+        Ok(false)
+    }
+
+    #[tauri::command]
     pub async fn install_flatpak(app: AppHandle, ref_name: String) -> Result<(), String> {
         let installation = Installation::new_system(None::<&libflatpak::gio::Cancellable>)
             .map_err(|e| e.to_string())?;
@@ -135,7 +158,6 @@ pub mod flatpak {
         let is_complete = Arc::new(Mutex::new(false));
         let is_complete_clone = is_complete.clone();
         
-        // Start progress simulation in background thread
         let progress_handle = thread::spawn(move || {
             let mut progress = 20;
             loop {
@@ -148,7 +170,6 @@ pub mod flatpak {
             }
         });
 
-        // Run the transaction (blocking)
         let result = tx.run(Some(&cancellable))
             .map_err(|e| format!("Transaction failed: {}", e));
 
