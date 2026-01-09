@@ -326,7 +326,6 @@ async fn fetch_all_apps(app: &AppHandle, pool: &SqlitePool) -> Result<(), String
         .map_err(|e| format!("Failed to parse app IDs JSON: {}", e))?;
     
     eprintln!("fetch_all_apps: Got {} app IDs", app_ids.len());
-    let total_apps = app_ids.len();
     let mut total_fetched = 0;
     
     for chunk in app_ids.chunks(APPS_PER_PAGE) {
@@ -390,7 +389,7 @@ async fn fetch_all_apps(app: &AppHandle, pool: &SqlitePool) -> Result<(), String
     Ok(())
 }
 
-async fn fetch_all_categories(app: &AppHandle, pool: &SqlitePool) -> Result<(), String> {
+async fn fetch_all_categories(_app: &AppHandle, pool: &SqlitePool) -> Result<(), String> {
     let common_categories = vec![
         ("AudioVideo", "Audio & Video"),
         ("Development", "Development"),
@@ -534,7 +533,7 @@ pub async fn fetch_collection(
 
 async fn fetch_collection_impl(
     app: &AppHandle,
-    pool: &SqlitePool,
+    _pool: &SqlitePool,
     collection_type: &str,
 ) -> Result<Vec<String>, String> {
     let url = format!("{}/collection/{}", FLATHUB_API_BASE, collection_type);
